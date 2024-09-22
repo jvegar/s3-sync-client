@@ -1,6 +1,6 @@
 import * as fs from 'fs';
 import * as path from 'path';
-import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, GetObjectCommand } from "@aws-sdk/client-s3";
+import { S3Client, PutObjectCommand, DeleteObjectCommand, ListObjectsV2Command, GetObjectCommand, S3ClientConfig } from "@aws-sdk/client-s3";
 import chokidar from 'chokidar';
 import crypto from 'crypto';
 import 'dotenv/config';
@@ -12,9 +12,9 @@ const s3Client = new S3Client(
 			secretAccessKey: process.env.AWS_ACCESS_KEY_SECRET,
 			accessKeyId: process.env.AWS_ACCESS_KEY_ID
 		}
-	});
+	} as S3ClientConfig);
 const bucketName = process.env.BUCKET_NAME;
-const localFolderPath = process.env.LOCAL_FOLDER_PATH;
+const localFolderPath = "/storage/emulated/0/Documents/jvegar-vault";
 const isDryRun = process.env.DRY_RUN === 'true';
 
 interface FileState {
@@ -234,15 +234,29 @@ async function main() {
     await performInitialSync();
 
     // Set up watcher for continuous sync (as before)
-    const watcher = chokidar.watch(localFolderPath, {
-        persistent: true,
-        ignoreInitial: true
-    });
+const watcher = chokidar.watch(localFolderPath, {
+    persistent: true,
+    ignoreInitial: true
+});
 
-    watcher
-        .on('add', async (filePath) => { /* ... */ })
-        .on('change', async (filePath) => { /* ... */ })
-        .on('unlink', async (filePath) => { /* ... */ });
+watcher
+    .on('add', async (filePath) => {
+        const key = path.relative(localFolderPath, filePath);
+        const md5 = await calculateMD5(filePath);
+        localState.set(key, { path: key, md5, lastModified: new Date() });
+        await uploadToS3(filePath);
+    })
+    .on('change', async (filePath) => {
+        const key = path.relative(localFolderPath, filePath);
+        const md5 = await calculateMD5(filePath);
+        localState.set(key, { path: key, md5, lastModified: new Date() });
+        await uploadToS3(filePath);
+    })
+    .on('unlink', async (filePath) => {
+        const key = path.relative(localFolderPath, filePath);
+        localState.delete(key);
+        await deleteFromS3(key);
+    });
 
     // Periodic sync (as before)
     setInterval(async () => {
