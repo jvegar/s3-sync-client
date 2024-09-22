@@ -13,8 +13,8 @@ const s3Client = new S3Client(
 			accessKeyId: process.env.AWS_ACCESS_KEY_ID
 		}
 	});
-const bucketName = "onlinepd-test-contoso";
-const localFolderPath = "/data/data/com.termux/files/home/storage/music";
+const bucketName = process.env.BUCKET_NAME;
+const localFolderPath = process.env.LOCAL_FOLDER_PATH;
 const isDryRun = process.env.DRY_RUN === 'true';
 
 interface FileState {
